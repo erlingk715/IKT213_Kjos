@@ -1,3 +1,0 @@
-fps: 30.0
-height: 480
-width: 640
