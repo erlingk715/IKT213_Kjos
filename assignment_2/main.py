@@ -11,7 +11,7 @@ def ensure_dirs():
     return script_dir, out_dir
 
 def load_lena(script_dir: Path):
-    # Prøv i script-mappa først
+    # Prøv i script-mappa først, deretter i foreldremappa
     candidates = [
         script_dir / "lena.png",
         script_dir.parent / "lena.png",
@@ -57,16 +57,19 @@ def hsv(image):
     """Convert BGR -> HSV."""
     return cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-def hue_shifted(image, emptyPictureArray, hue):
+def hue_shifted(image, hue_degrees):
     """
-    Shift color values by 'hue' with wrap-around in uint8.
-    (Adds to all 3 channels; values beyond [0,255] wraps pga uint8.)
+    Ekte hue-shift: konverter BGR->HSV, forskyv kun H-kanalen.
+    hue_degrees forventes i [0, 360). OpenCV bruker H i [0,179].
     """
-    # Kopier først (uten cv2.copy)
-    target = copy(image, emptyPictureArray)
-    # Wrap-around: uint8 addition ruller over automatisk
-    shifted = (target.astype(np.uint16) + int(hue)) % 256
-    return shifted.astype(np.uint8)
+    hue_degrees = float(hue_degrees) % 360.0
+    hsv_img = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv_img)
+    shift = int(hue_degrees * 180.0 / 360.0)  # grader -> [0,179]
+    h = (h.astype(np.int16) + shift) % 180
+    h = h.astype(np.uint8)
+    hsv_shifted = cv2.merge([h, s, v])
+    return cv2.cvtColor(hsv_shifted, cv2.COLOR_HSV2BGR)
 
 def smoothing(image):
     """Gaussian blur ksize=(15,15), default border."""
@@ -113,14 +116,12 @@ if __name__ == "__main__":
     gray = grayscale(img)
     cv2.imwrite(str(out_dir / "lena_grayscale.png"), gray)
 
-    # HSV
+    # HSV (lagres som HSV-data – ser “falsk farge” ut i visere, det er ok)
     hsv_img = hsv(img)
-    # Merk: lagrer HSV som PNG (ser “falsk farge” ut i bildevisere, men det er korrekt HSV-data)
     cv2.imwrite(str(out_dir / "lena_hsv.png"), hsv_img)
 
-    # Color shift: shift +50 (wrap-around)
-    empty_for_shift = np.zeros_like(img, dtype=np.uint8)
-    shifted = hue_shifted(img, empty_for_shift, hue=50)
+    # Ekte hue shift: +50 grader
+    shifted = hue_shifted(img, 50)
     cv2.imwrite(str(out_dir / "lena_hue_shifted_plus50.png"), shifted)
 
     # Smoothing (Gaussian blur 15x15)
